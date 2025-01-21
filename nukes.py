@@ -7,7 +7,9 @@ import sys
 from datetime import datetime, timedelta
 import os
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+
+logging.basicConfig(level=logging.WARNING, format=LOG_FORMAT)
 
 log_file_path = '/mnt/glftpd/ftp-data/logs/glftpd.log'
 csv_file_path = '/mnt/glftpd/bin/nukes_stats.csv'
@@ -52,6 +54,7 @@ def load_existing_entries():
         logging.error(f"Error reading CSV file: {e}")
     return existing_keys
 
+
 def save_to_csv(existing_keys):
     new_entries = []
     try:
@@ -94,6 +97,7 @@ def save_to_csv(existing_keys):
     except Exception as e:
         logging.error(f"Error processing log file: {e}")
 
+
 def load_user_statistics(username):
     user_statistics = defaultdict(lambda: {
         'total_gb': 0,
@@ -122,28 +126,49 @@ def load_user_statistics(username):
         logging.error(f"Error reading user data from CSV: {e}")
     return user_statistics
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "update":
+
+def update_csv(log_info=True):
+    logger = logging.getLogger()
+    original_level = logger.level
+
+    if log_info:
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.WARNING)
+
+    try:
         clean_csv()
         existing_keys = load_existing_entries()
         save_to_csv(existing_keys)
+    finally:
+        logger.setLevel(original_level)
+
+
+def print_statistics(statistics, username):
+    if statistics:
+        print(f"\nStatistics for user: {username} (Last 30 Days)")
+        for username, data in statistics.items():
+            print(f"\n{'=' * 100}")
+            print(f"{'Username':<20} | {'Total GB':<15} | {'Nuke Count':<20}")
+            print(f"{'-' * 100}")
+            print(f"{username:<20} | {data['total_gb']:<15.2f} GB | {data['count']:<20}")
+            print(f"\n{'=' * 100}")
+            print(f"{'Timestamp':<25} | {'Release':<60} | {'Nuke Reason':<30} | {'Multiplier':<15} | {'Total GB':<15}")
+            print(f"{'-' * 100}")
+            for detail in data['details']:
+                print(f"{detail['timestamp']:<25} | {detail['release']:<60} | {detail['nuke_reason']:<30} | {detail['multiplier']:<15} | {detail['total_gb']:<15.2f} GB")
+    else:
+        print(f"No data found for user: {username}.")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "update":
+        update_csv(log_info=True)
     elif len(sys.argv) == 2:
         target_username = sys.argv[1]
+        update_csv(log_info=False)
         statistics = load_user_statistics(target_username)
-        if statistics:
-            print("\nStatistics for user: " + target_username + " (Last 30 Days)")
-            for username, data in statistics.items():
-                print(f"\n{'=' * 100}")
-                print(f"{'Username':<20} | {'Total GB':<15} | {'Nuke Count':<20}")
-                print(f"{'-' * 100}")
-                print(f"{username:<20} | {data['total_gb']:<15.2f} GB | {data['count']:<20}")
-                print(f"\n{'=' * 100}")
-                print(f"{'Timestamp':<25} | {'Release':<60} | {'Nuke Reason':<30} | {'Multiplier':<15} | {'Total GB':<15}")
-                print(f"{'-' * 100}")
-                for detail in data['details']:
-                    print(f"{detail['timestamp']:<25} | {detail['release']:<60} | {detail['nuke_reason']:<30} | {detail['multiplier']:<15} | {detail['total_gb']:<15.2f} GB")
-        else:
-            print(f"No data found for user: {target_username}.")
+        print_statistics(statistics, target_username)
     else:
         print("Usage:")
         print("  To update CSV: python3 nukes.py update")
